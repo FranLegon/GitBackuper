@@ -124,6 +124,12 @@ gitbackuper \
 
 All repos from the GitLab `engineering-team` group are backed up to two destinations simultaneously.
 
+#### My personal use case: backup all repos from my GitHub user to both GitHub and GitLab, with prefix and forced private visibility
+
+```bash
+go build -o bin\gitbackuper.exe main.go; bin\gitbackuper.exe --source "github:FranLegon" --dest "github:FranLegon-Org,gitlab:FranLegon" --prefix=true --force-private=true
+```
+
 ## Flags Reference
 
 | Flag | Required | Description |

@@ -116,3 +116,27 @@ func RefExists(repoDir, ref string) bool {
 	cmd := exec.Command("git", "-C", repoDir, "rev-parse", "--verify", ref)
 	return cmd.Run() == nil
 }
+
+func LsRemote(url string) (map[string]string, error) {
+	cmd := exec.Command("git", "ls-remote", url)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-remote %s failed: %w", url, err)
+	}
+
+	refs := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		ref := parts[1]
+		if strings.HasPrefix(ref, "refs/heads/") || strings.HasPrefix(ref, "refs/tags/") {
+			refs[ref] = parts[0]
+		}
+	}
+	return refs, nil
+}

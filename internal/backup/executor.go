@@ -56,6 +56,12 @@ func (e *Executor) backupRepo(repo *config.Repository) error {
 		}
 	}
 
+	destsToSync := e.destinationsNeedingSync(repo)
+	if len(destsToSync) == 0 {
+		log.Printf("  All destinations up to date, skipping")
+		return nil
+	}
+
 	tempDir, err := os.MkdirTemp("", "gitbackuper-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
@@ -67,12 +73,57 @@ func (e *Executor) backupRepo(repo *config.Repository) error {
 		return fmt.Errorf("cloning: %w", err)
 	}
 
-	for _, dest := range e.cfg.Destinations {
+	for _, dest := range destsToSync {
 		if err := e.syncToDestination(tempDir, repo, dest); err != nil {
 			return fmt.Errorf("syncing to %s:%s: %w", dest.Platform, dest.Owner, err)
 		}
 	}
 	return nil
+}
+
+func (e *Executor) destinationsNeedingSync(repo *config.Repository) []config.Destination {
+	sourceRefs, err := git.LsRemote(repo.CloneURL)
+	if err != nil {
+		log.Printf("  Warning: could not ls-remote source, proceeding with full backup: %v", err)
+		return e.cfg.Destinations
+	}
+
+	var needSync []config.Destination
+	for _, dest := range e.cfg.Destinations {
+		destName := repo.Name
+		if e.cfg.Prefix {
+			destName = "backup_" + destName
+		}
+
+		plat := e.platforms[dest.Platform]
+		if plat == nil {
+			needSync = append(needSync, dest)
+			continue
+		}
+
+		destURL := plat.CloneURL(dest.Owner, destName)
+		destRefs, err := git.LsRemote(destURL)
+		if err != nil {
+			needSync = append(needSync, dest)
+			continue
+		}
+
+		if refsMatch(sourceRefs, destRefs) {
+			log.Printf("  Skipping %s:%s/%s (already up to date)", dest.Platform, dest.Owner, destName)
+		} else {
+			needSync = append(needSync, dest)
+		}
+	}
+	return needSync
+}
+
+func refsMatch(source, dest map[string]string) bool {
+	for ref, hash := range source {
+		if destHash, ok := dest[ref]; !ok || destHash != hash {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Executor) syncToDestination(repoDir string, repo *config.Repository, dest config.Destination) error {

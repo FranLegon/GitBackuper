@@ -57,14 +57,18 @@ func Check() error {
 
 	for _, t := range tools {
 		if !isInstalled(t.name) {
-			if err := promptInstall(t); err != nil {
-				return err
-			}
-			if !isInstalled(t.name) {
-				if err := findAndAddToPath(t.name); err != nil {
-					return fmt.Errorf("%s is still not available in PATH after installation — you may need to restart your terminal", t.name)
-				}
+			if err := findAndAddToPath(t.name); err == nil {
 				fmt.Printf("Found %s and added its directory to PATH for this session.\n", t.name)
+			} else {
+				if err := promptInstall(t); err != nil {
+					return err
+				}
+				if !isInstalled(t.name) {
+					if err := findAndAddToPath(t.name); err != nil {
+						return fmt.Errorf("%s is still not available in PATH after installation — you may need to restart your terminal", t.name)
+					}
+					fmt.Printf("Found %s and added its directory to PATH for this session.\n", t.name)
+				}
 			}
 		}
 
