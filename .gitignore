@@ -1,7 +1,10 @@
 # Binaries
 gitbackuper
+gitbackuper~
 gitbackuper.exe
+gitbackuper.exe~
 *.exe
+*.exe~
 *.dll
 *.so
 *.dylib
