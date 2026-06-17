@@ -9,6 +9,7 @@ import (
 	"github.com/FranLegon/GitBackuper/internal/backup"
 	"github.com/FranLegon/GitBackuper/internal/config"
 	"github.com/FranLegon/GitBackuper/internal/platform"
+	"github.com/FranLegon/GitBackuper/internal/prereq"
 	"github.com/FranLegon/GitBackuper/internal/source"
 	"github.com/spf13/cobra"
 )
@@ -56,6 +57,10 @@ func init() {
 }
 
 func runBackup(cmd *cobra.Command, args []string) error {
+	if err := prereq.Check(); err != nil {
+		return err
+	}
+
 	if err := validateFlags(cmd); err != nil {
 		return err
 	}
