@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -60,7 +61,10 @@ func Check() error {
 				return err
 			}
 			if !isInstalled(t.name) {
-				return fmt.Errorf("%s is still not available in PATH after installation — you may need to restart your terminal", t.name)
+				if err := findAndAddToPath(t.name); err != nil {
+					return fmt.Errorf("%s is still not available in PATH after installation — you may need to restart your terminal", t.name)
+				}
+				fmt.Printf("Found %s and added its directory to PATH for this session.\n", t.name)
 			}
 		}
 
@@ -147,4 +151,101 @@ func askYesNo() bool {
 		return answer == "" || answer == "y" || answer == "yes"
 	}
 	return false
+}
+
+func findAndAddToPath(name string) error {
+	binary := name
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
+
+	searchDirs := getSearchDirs()
+
+	for _, dir := range searchDirs {
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return filepath.SkipDir
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if strings.EqualFold(info.Name(), binary) {
+				binDir := filepath.Dir(path)
+				addToProcessPath(binDir)
+				return filepath.SkipAll
+			}
+			return nil
+		})
+		if err == filepath.SkipAll {
+			break
+		}
+		_ = err
+	}
+
+	return verifyInstalled(name)
+}
+
+func getSearchDirs() []string {
+	switch runtime.GOOS {
+	case "windows":
+		home := os.Getenv("USERPROFILE")
+		programFiles := os.Getenv("ProgramFiles")
+		localAppData := os.Getenv("LOCALAPPDATA")
+		var dirs []string
+		if localAppData != "" {
+			dirs = append(dirs, filepath.Join(localAppData, "Programs"))
+			dirs = append(dirs, filepath.Join(localAppData, "Microsoft", "WinGet", "Links"))
+		}
+		if programFiles != "" {
+			dirs = append(dirs, programFiles)
+		}
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, "AppData", "Local", "Programs"))
+			dirs = append(dirs, filepath.Join(home, "scoop", "shims"))
+		}
+		return dirs
+	case "linux":
+		home := os.Getenv("HOME")
+		dirs := []string{
+			"/usr/local/bin",
+			"/usr/bin",
+			"/snap/bin",
+		}
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, ".local", "bin"))
+			dirs = append(dirs, filepath.Join(home, "bin"))
+		}
+		return dirs
+	case "darwin":
+		home := os.Getenv("HOME")
+		dirs := []string{
+			"/usr/local/bin",
+			"/opt/homebrew/bin",
+			"/usr/bin",
+		}
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, ".local", "bin"))
+		}
+		return dirs
+	default:
+		return nil
+	}
+}
+
+func addToProcessPath(dir string) {
+	pathSep := string(os.PathListSeparator)
+	current := os.Getenv("PATH")
+	for _, d := range strings.Split(current, pathSep) {
+		if strings.EqualFold(d, dir) {
+			return
+		}
+	}
+	os.Setenv("PATH", current+pathSep+dir)
+}
+
+func verifyInstalled(name string) error {
+	if isInstalled(name) {
+		return nil
+	}
+	return fmt.Errorf("%s not found", name)
 }
